@@ -2,6 +2,7 @@ package com.eventcart.orderservice.idempotency;
 
 import java.time.Duration;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -9,6 +10,9 @@ import org.springframework.stereotype.Service;
 /**
  * Deduplicates Kafka events per (event type, order id) using Redis SETNX with a TTL.
  * Key format: {@code processed:event:<eventType>:<orderId>}. TTL: {@code event.idempotency.ttl-hours} (default 24).
+ * <p>
+ * Metrics: {@code idempotency.claims} with {@code result=miss|hit} (miss = first claim / key absent,
+ * hit = duplicate / key already present).
  */
 @Service
 public class IdempotencyService {
@@ -18,11 +22,14 @@ public class IdempotencyService {
 
     private final StringRedisTemplate stringRedisTemplate;
     private final Duration ttl;
+    private final MeterRegistry meterRegistry;
 
     public IdempotencyService(StringRedisTemplate stringRedisTemplate,
-            @Value("${event.idempotency.ttl-hours:24}") long ttlHours) {
+            @Value("${event.idempotency.ttl-hours:24}") long ttlHours,
+            MeterRegistry meterRegistry) {
         this.stringRedisTemplate = stringRedisTemplate;
         this.ttl = Duration.ofHours(ttlHours);
+        this.meterRegistry = meterRegistry;
     }
 
     /**
@@ -33,6 +40,10 @@ public class IdempotencyService {
     public boolean markIfNotProcessed(String eventType, String orderId) {
         String key = KEY_PREFIX + eventType + ":" + orderId;
         Boolean set = stringRedisTemplate.opsForValue().setIfAbsent(key, PROCESSED_MARKER, ttl);
-        return Boolean.TRUE.equals(set);
+        boolean first = Boolean.TRUE.equals(set);
+        meterRegistry.counter("idempotency.claims",
+                "result", first ? "miss" : "hit",
+                "eventType", eventType == null ? "unknown" : eventType).increment();
+        return first;
     }
 }

@@ -1,0 +1,89 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: eventcart-ingress
+  namespace: eventcart
+  labels:
+    app.kubernetes.io/name: eventcart-ingress
+    app.kubernetes.io/component: networking
+    app.kubernetes.io/part-of: eventcart
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    # Rate limiting for public API (production baseline)
+    nginx.ingress.kubernetes.io/limit-rps: "50"
+    nginx.ingress.kubernetes.io/limit-burst-multiplier: "3"
+spec:
+  ingressClassName: nginx
+  rules:
+    # Public Order API
+    - host: api.eventcart.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: order-service
+                port:
+                  number: 8080
+    # Internal ops: Grafana dashboards
+    - host: grafana.eventcart.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: grafana
+                port:
+                  number: 3000
+    # Internal ops: Prometheus (restrict in production via NetworkPolicy / auth proxy)
+    - host: prometheus.eventcart.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: prometheus
+                port:
+                  number: 9090
+    # Internal ops: Kafka UI
+    - host: kafka-ui.eventcart.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: kafka-ui
+                port:
+                  number: 8080
+    # Health/debug endpoints for internal services (not for public internet)
+    - host: ops.eventcart.local
+      http:
+        paths:
+          - path: /inventory
+            pathType: Prefix
+            backend:
+              service:
+                name: inventory-service
+                port:
+                  number: 8081
+          - path: /payment
+            pathType: Prefix
+            backend:
+              service:
+                name: payment-service
+                port:
+                  number: 8082
+          - path: /notification
+            pathType: Prefix
+            backend:
+              service:
+                name: notification-service
+                port:
+                  number: 8083

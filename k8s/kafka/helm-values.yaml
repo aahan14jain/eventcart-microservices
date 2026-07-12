@@ -1,0 +1,107 @@
+# Bitnami Kafka Helm values for EventCart on Kind/local clusters.
+# Install:
+#   helm repo add bitnami https://charts.bitnami.com/bitnami
+#   helm repo update
+#   helm upgrade --install eventcart-kafka bitnami/kafka \
+#     --namespace eventcart \
+#     --create-namespace \
+#     -f k8s/kafka/helm-values.yaml \
+#     --wait --timeout 10m
+#
+# Service DNS (in-cluster bootstrap):
+#   eventcart-kafka:9092
+
+global:
+  storageClass: standard
+
+# KRaft mode (no ZooKeeper) — production-aligned single-broker for Kind
+kraft:
+  enabled: true
+
+image:
+  registry: docker.io
+  repository: bitnami/kafka
+  tag: 3.9.0-debian-12-r8
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+listeners:
+  client:
+    protocol: PLAINTEXT
+    containerPort: 9092
+  controller:
+    protocol: PLAINTEXT
+    containerPort: 9093
+  interbroker:
+    protocol: PLAINTEXT
+    containerPort: 9094
+  external:
+    protocol: PLAINTEXT
+    containerPort: 9095
+
+# Internal cluster access only (no external LoadBalancer on Kind)
+externalAccess:
+  enabled: false
+
+# Production: disable auto-topic creation; topics are pre-provisioned via Job
+autoCreateTopicsEnable: false
+numPartitions: 3
+defaultReplicationFactor: 1
+offsetsTopicReplicationFactor: 1
+transactionStateLogReplicationFactor: 1
+transactionStateLogMinIsr: 1
+
+persistence:
+  enabled: true
+  size: 8Gi
+  storageClass: standard
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 1Gi
+  limits:
+    cpu: "2"
+    memory: 2Gi
+
+livenessProbe:
+  enabled: true
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 6
+
+readinessProbe:
+  enabled: true
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 6
+
+metrics:
+  jmx:
+    enabled: true
+  serviceMonitor:
+    enabled: false
+
+# Pod labels for observability
+commonLabels:
+  app.kubernetes.io/part-of: eventcart
+  app.kubernetes.io/component: messaging
+
+podLabels:
+  app.kubernetes.io/name: kafka
+
+service:
+  type: ClusterIP
+  ports:
+    client: 9092
+
+# Log retention tuned for demo/local (increase for production)
+logRetentionHours: 168
+logRetentionBytes: _-1
+
+# Network policy (enable in hardened clusters)
+networkPolicy:
+  enabled: false

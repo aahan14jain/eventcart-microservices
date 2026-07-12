@@ -1,0 +1,33 @@
+# Example systemd unit — Spring Boot stdout/stderr go to the journal (and optionally a log file).
+# CloudWatch agent journal collectors use Unit=<service>.service and Log Group =<service>.
+#
+# Install:
+#   sudo cp scripts/ec2/systemd/order-service.service.example /etc/systemd/system/order-service.service
+#   sudo systemctl daemon-reload && sudo systemctl enable --now order-service
+#
+# Adjust User, WorkingDirectory, and ExecStart paths for your AMI layout.
+
+[Unit]
+Description=EventCart order-service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=eventcart
+WorkingDirectory=/opt/eventcart/order-service
+Environment=SPRING_PROFILES_ACTIVE=kubernetes
+Environment=CLOUDWATCH_ENABLED=true
+Environment=AWS_REGION=us-east-1
+Environment=CLOUDWATCH_NAMESPACE=EventCart
+# JSON logs on stdout (default when not on local/dev profile)
+ExecStart=/usr/bin/java -jar /opt/eventcart/order-service/order-service.jar
+# Also append to the file the CloudWatch agent tails
+StandardOutput=append:/var/log/eventcart/order-service.log
+StandardError=append:/var/log/eventcart/order-service.log
+Restart=on-failure
+RestartSec=5
+SuccessExitStatus=143
+
+[Install]
+WantedBy=multi-user.target

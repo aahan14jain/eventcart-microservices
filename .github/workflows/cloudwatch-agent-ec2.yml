@@ -1,0 +1,46 @@
+name: EC2 — Install CloudWatch Agent
+
+# Runs on a self-hosted EC2 runner (or via SSH) to install/configure the
+# Amazon CloudWatch agent: app logs → Log Groups named after each service,
+# plus CPU / memory / disk host metrics.
+#
+# Required IAM on the instance role: CloudWatchAgentServerPolicy
+
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: "Optional single service (e.g. order-service). Leave empty for all."
+        required: false
+        default: ""
+        type: string
+
+jobs:
+  install-cloudwatch-agent:
+    name: Install & configure CloudWatch agent
+    # Requires a self-hosted runner on the target EC2 instance with labels: self-hosted, linux, ec2
+    runs-on: [self-hosted, linux, ec2]
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install CloudWatch agent
+        run: |
+          set -euo pipefail
+          chmod +x scripts/ec2/install-cloudwatch-agent.sh
+          EXTRA_ARGS=()
+          if [[ -n "${{ inputs.service }}" ]]; then
+            EXTRA_ARGS+=(--service "${{ inputs.service }}")
+          fi
+          sudo ./scripts/ec2/install-cloudwatch-agent.sh \
+            --config monitoring/cloudwatch-agent/amazon-cloudwatch-agent.json \
+            "${EXTRA_ARGS[@]}"
+
+      - name: Verify agent status
+        run: |
+          set -euo pipefail
+          sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -m ec2 -a status
+          echo "--- recent agent log ---"
+          sudo tail -n 40 /opt/aws/amazon-cloudwatch-agent/logs/amazon-cloudwatch-agent.log || true

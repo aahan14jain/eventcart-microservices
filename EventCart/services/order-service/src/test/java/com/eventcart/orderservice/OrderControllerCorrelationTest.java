@@ -1,8 +1,10 @@
 package com.eventcart.orderservice;
 
+import com.eventcart.orderservice.admin.SagaAdminService;
 import com.eventcart.orderservice.cache.RedisOrderCacheService;
 import com.eventcart.orderservice.events.OrderCreatedEvent;
 import com.eventcart.orderservice.messaging.OrderEventPublisher;
+import com.eventcart.orderservice.metrics.SagaMetrics;
 import com.eventcart.orderservice.observability.CorrelationId;
 import com.eventcart.orderservice.observability.CorrelationIdFilter;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,11 +35,18 @@ class OrderControllerCorrelationTest {
     @Mock
     private RedisOrderCacheService redisOrderCacheService;
 
+    @Mock
+    private SagaMetrics sagaMetrics;
+
+    @Mock
+    private SagaAdminService sagaAdminService;
+
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
-        OrderController controller = new OrderController(orderStore, orderEventPublisher, redisOrderCacheService);
+        OrderController controller = new OrderController(orderStore, orderEventPublisher, redisOrderCacheService,
+                sagaMetrics, sagaAdminService);
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .addFilters(new CorrelationIdFilter())
                 .build();

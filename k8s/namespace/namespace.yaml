@@ -1,0 +1,47 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: eventcart
+  labels:
+    app.kubernetes.io/part-of: eventcart
+    app.kubernetes.io/managed-by: kubectl
+    environment: local-kind
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: eventcart-quota
+  namespace: eventcart
+  labels:
+    app.kubernetes.io/part-of: eventcart
+spec:
+  hard:
+    requests.cpu: "8"
+    requests.memory: 16Gi
+    limits.cpu: "16"
+    limits.memory: 32Gi
+    persistentvolumeclaims: "10"
+    pods: "40"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: eventcart-limits
+  namespace: eventcart
+  labels:
+    app.kubernetes.io/part-of: eventcart
+spec:
+  limits:
+    - type: Container
+      default:
+        cpu: "500m"
+        memory: 512Mi
+      defaultRequest:
+        cpu: "100m"
+        memory: 256Mi
+      max:
+        cpu: "2"
+        memory: 2Gi
+      min:
+        cpu: "50m"
+        memory: 128Mi

@@ -1,0 +1,248 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: grafana-data
+  namespace: eventcart
+  labels:
+    app.kubernetes.io/name: grafana
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: eventcart
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+  storageClassName: standard
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: grafana-secret
+  namespace: eventcart
+  labels:
+    app.kubernetes.io/name: grafana
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: eventcart
+type: Opaque
+stringData:
+  GF_SECURITY_ADMIN_USER: admin
+  GF_SECURITY_ADMIN_PASSWORD: eventcart-grafana-admin
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: eventcart
+  labels:
+    app.kubernetes.io/name: grafana
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: eventcart
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        uid: prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus:9090
+        isDefault: true
+        editable: false
+        jsonData:
+          timeInterval: 15s
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards-provider
+  namespace: eventcart
+  labels:
+    app.kubernetes.io/name: grafana
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: eventcart
+data:
+  dashboards.yaml: |
+    apiVersion: 1
+    providers:
+      - name: eventcart
+        orgId: 1
+        folder: EventCart
+        type: file
+        disableDeletion: false
+        editable: true
+        options:
+          path: /var/lib/grafana/dashboards
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+  namespace: eventcart
+  labels:
+    app.kubernetes.io/name: grafana
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: eventcart
+data:
+  eventcart-overview.json: |
+    {
+      "annotations": { "list": [] },
+      "editable": true,
+      "fiscalYearStartMonth": 0,
+      "graphTooltip": 1,
+      "id": null,
+      "links": [],
+      "panels": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": { "defaults": { "unit": "reqps" }, "overrides": [] },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+          "id": 1,
+          "title": "HTTP Request Rate (order-service)",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "sum(rate(http_server_requests_seconds_count{application=\"order-service\"}[5m]))",
+              "legendFormat": "req/s"
+            }
+          ]
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+          "id": 2,
+          "title": "HTTP Latency p95 (order-service)",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{application=\"order-service\"}[5m])) by (le))",
+              "legendFormat": "p95"
+            }
+          ]
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
+          "id": 3,
+          "title": "JVM Memory Used (all services)",
+          "type": "timeseries",
+          "targets": [
+            {
+              "expr": "sum(jvm_memory_used_bytes{area=\"heap\"}) by (application)",
+              "legendFormat": "{{application}}"
+            }
+          ]
+        }
+      ],
+      "refresh": "15s",
+      "schemaVersion": 39,
+      "tags": ["eventcart", "microservices"],
+      "templating": { "list": [] },
+      "time": { "from": "now-1h", "to": "now" },
+      "title": "EventCart Overview",
+      "uid": "eventcart-overview",
+      "version": 1
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: eventcart
+  labels:
+    app.kubernetes.io/name: grafana
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: eventcart
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: grafana
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: grafana
+        app.kubernetes.io/part-of: eventcart
+    spec:
+      securityContext:
+        fsGroup: 472
+        runAsUser: 472
+        runAsNonRoot: true
+      containers:
+        - name: grafana
+          image: grafana/grafana:11.4.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 3000
+          envFrom:
+            - secretRef:
+                name: grafana-secret
+          env:
+            - name: GF_USERS_ALLOW_SIGN_UP
+              value: "false"
+            - name: GF_SERVER_ROOT_URL
+              value: http://grafana.eventcart.local
+            - name: GF_SECURITY_DISABLE_GRAVATAR
+              value: "true"
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/grafana
+            - name: datasources
+              mountPath: /etc/grafana/provisioning/datasources
+            - name: dashboards-provider
+              mountPath: /etc/grafana/provisioning/dashboards
+            - name: dashboards
+              mountPath: /var/lib/grafana/dashboards
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: grafana-data
+        - name: datasources
+          configMap:
+            name: grafana-datasources
+        - name: dashboards-provider
+          configMap:
+            name: grafana-dashboards-provider
+        - name: dashboards
+          configMap:
+            name: grafana-dashboards
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: eventcart
+  labels:
+    app.kubernetes.io/name: grafana
+    app.kubernetes.io/part-of: eventcart
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http
+  selector:
+    app.kubernetes.io/name: grafana

@@ -1,0 +1,28 @@
+# Kind cluster configuration for EventCart local development.
+# Features:
+#   - Ingress-ready control-plane node
+#   - Host port mappings for direct access without /etc/hosts (optional)
+#   - Local storage provisioner (default on Kind)
+
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: eventcart
+nodes:
+  - role: control-plane
+    kubeadmConfigPatches:
+      - |
+        kind: InitConfiguration
+        nodeRegistration:
+          kubeletExtraArgs:
+            node-labels: "ingress-ready=true"
+    extraPortMappings:
+      # NGINX Ingress → host (http)
+      - containerPort: 80
+        hostPort: 80
+        protocol: TCP
+      # NGINX Ingress → host (https)
+      - containerPort: 443
+        hostPort: 443
+        protocol: TCP
+  - role: worker
+  - role: worker

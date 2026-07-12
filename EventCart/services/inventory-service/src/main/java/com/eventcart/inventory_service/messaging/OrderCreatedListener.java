@@ -3,11 +3,12 @@ package com.eventcart.inventory_service.messaging;
 import com.eventcart.inventory_service.events.InventoryFailedEvent;
 import com.eventcart.inventory_service.events.InventoryReservedEvent;
 import com.eventcart.inventory_service.idempotency.IdempotencyService;
+import com.eventcart.inventory_service.metrics.SagaMetrics;
+import com.eventcart.inventory_service.observability.LogMdc;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.slf4j.MDC;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.messaging.handler.annotation.Header;
@@ -29,25 +30,26 @@ public class OrderCreatedListener {
     private final ObjectMapper objectMapper;
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final IdempotencyService idempotencyService;
+    private final SagaMetrics sagaMetrics;
 
     public OrderCreatedListener(ObjectMapper objectMapper, KafkaTemplate<String, Object> kafkaTemplate,
-            IdempotencyService idempotencyService) {
+            IdempotencyService idempotencyService, SagaMetrics sagaMetrics) {
         this.objectMapper = objectMapper;
         this.kafkaTemplate = kafkaTemplate;
         this.idempotencyService = idempotencyService;
+        this.sagaMetrics = sagaMetrics;
     }
 
     @KafkaListener(topics = "order.created", groupId = "inventory-group")
     public void onOrderCreated(
             @Payload String message,
             @Header(name = CORRELATION_ID_KEY, required = false) byte[] correlationIdHeader) {
-        try {
+        try (var ignored = LogMdc.eventType(EVENT_ORDER_CREATED)) {
             JsonNode root = objectMapper.readTree(message);
             String orderId = root.has("orderId") ? root.get("orderId").asText() : null;
             String correlationId = resolveCorrelationId(correlationIdHeader, root);
-            boolean mdcSet = correlationId != null;
-            if (mdcSet) {
-                MDC.put(CORRELATION_ID_KEY, correlationId);
+            if (correlationId != null) {
+                LogMdc.putTraceId(correlationId);
             }
             try {
                 if (orderId == null) {
@@ -64,6 +66,7 @@ public class OrderCreatedListener {
                 if (message.contains("\"sku\":\"FAIL\"") || message.contains("\"sku\": \"FAIL\"")) {
                     InventoryFailedEvent event = new InventoryFailedEvent(orderId, "OUT_OF_STOCK");
                     kafkaTemplate.send("inventory.failed", orderId, event);
+                    sagaMetrics.stepFailed(SagaMetrics.STEP_INVENTORY_FAILED);
                     log.info("event processed: eventType={} orderId={} eventId={} result={} status={}",
                             "inventory.failed", orderId, NO_EVENT_ID, "published", "OUT_OF_STOCK");
                 } else {
@@ -72,15 +75,15 @@ public class OrderCreatedListener {
                         event.setForcePaymentFailure(true);
                     }
                     kafkaTemplate.send("inventory.reserved", orderId, event);
+                    sagaMetrics.stepCompleted(SagaMetrics.STEP_INVENTORY_RESERVED);
                     log.info("event processed: eventType={} orderId={} eventId={} result={} status={}",
                             "inventory.reserved", orderId, NO_EVENT_ID, "published", "RESERVED");
                 }
             } finally {
-                if (mdcSet) {
-                    MDC.remove(CORRELATION_ID_KEY);
-                }
+                LogMdc.clearTraceId();
             }
         } catch (Exception e) {
+            sagaMetrics.stepFailed(EVENT_ORDER_CREATED);
             log.error("event processed: eventType={} orderId={} eventId={} result={} error={}",
                     EVENT_ORDER_CREATED, "unknown", NO_EVENT_ID, "handler_failed", e.getMessage());
         }

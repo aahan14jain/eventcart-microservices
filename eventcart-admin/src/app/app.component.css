@@ -1,0 +1,18 @@
+.toolbar {
+  gap: 1rem;
+}
+
+.brand {
+  font-weight: 600;
+  margin-right: 0.5rem;
+}
+
+.nav a.active {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.content {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1.25rem 1rem 2rem;
+}

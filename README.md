@@ -30,12 +30,16 @@ This project implements a microservices-based event-driven architecture for mana
 
 ## 🛠️ Technology Stack
 
-- **Java 17**
-- **Spring Boot 4.0.x**
-- **Apache Kafka** - Event-driven communication
-- **Spring Web MVC** - RESTful APIs
-- **Spring Actuator** - Health checks and monitoring
-- **Maven** - Build and dependency management
+- **Java 17** · **Spring Boot 4.0.x** · **Maven**
+- **Apache Kafka** — saga choreography
+- **Redis** — idempotency (`SETNX`) + order-status cache
+- **PostgreSQL** — order + `saga_state` persistence (`postgres` profile)
+- **Micrometer** — Prometheus + optional CloudWatch metrics
+- **Spring Security** — admin API (Basic / API key), separate from `/orders`
+- **Angular 19** — internal admin dashboard (`eventcart-admin`)
+- **React** — customer demo UI (`eventcart-frontend`)
+- **k6** — checkout load tests (`load-tests/k6`)
+- **Kind / Kubernetes** — local cluster deploy (see `DEPLOYMENT.md`)
 
 ## 📋 Prerequisites
 
@@ -101,23 +105,28 @@ mvn spring-boot:run
 
 ### 5. Verify Services
 
-Health check endpoints:
+Default ports (override with `SERVER_PORT`):
 
-- Order Service: `http://localhost:8084/orders/hello`
-- Payment Service: `http://localhost:8082/payments/hello`
-- Inventory Service: `http://localhost:8081/inventory/hello`
-- Notification Service: `http://localhost:8083/notifications/hello`
+| Service | Port | Hello |
+|---------|------|-------|
+| Order | **8080** | `http://localhost:8080/orders/hello` |
+| Inventory | 8081 | `http://localhost:8081/inventory/hello` |
+| Payment | 8082 | `http://localhost:8082/payments/hello` |
+| Notification | 8083 | `http://localhost:8083/notifications/hello` |
 
 ## 📁 Project Structure
 
 ```
-EventCart/
-├── services/
-│   ├── order-service/          # Order management microservice
-│   ├── payment-service/        # Payment processing microservice
-│   ├── inventory-service/      # Inventory management microservice
-│   └── notification-service/   # Notification microservice
-└── infra/                       # Infrastructure configurations
+JavaEventCart/
+├── EventCart/services/          # Spring Boot microservices
+├── eventcart-frontend/          # React checkout demo (proxy → :8080)
+├── eventcart-admin/             # Angular admin (sagas + DLQ)
+├── load-tests/k6/               # Checkout load test + observability report
+├── monitoring/cloudwatch-agent/ # EC2 CloudWatch agent config
+├── k8s/                         # Kind/Kubernetes manifests
+├── prometheus/ · grafana/       # Local metrics stack
+├── scripts/                     # deploy / Kind / CloudWatch install
+└── DEPLOYMENT.md                # Kubernetes deployment guide
 ```
 
 ## 🔄 Event-Driven Communication
@@ -138,41 +147,98 @@ cd EventCart/services/<service-name>
 mvn test
 ```
 
-## 📊 Phase 4 Observability (Prometheus + Grafana)
+## 📊 Observability (Prometheus, Grafana, CloudWatch)
 
-Phase 4 adds service-level metrics and dashboards for local monitoring:
-
-- **Spring Boot Actuator** endpoints on each service
-- **Prometheus** scrapes `/actuator/prometheus`
-- **Grafana** visualizes service and JVM/Kafka metrics
-
-### Start observability stack
+### Local Prometheus + Grafana
 
 ```bash
-docker compose up -d prometheus grafana
+docker compose up -d kafka kafka-exporter prometheus grafana
 ```
 
-### Key local endpoints
+| UI | URL |
+|----|-----|
+| Prometheus | http://localhost:9090 |
+| Grafana (admin/admin) | http://localhost:3000 |
+| Dashboard | **EventCart Load Test** (Kafka lag, Redis idempotency, Hikari pool, HTTP p95) |
+| Kafka UI | http://localhost:8085 |
 
-- Prometheus UI: `http://localhost:9090`
-- Grafana UI: `http://localhost:3000`
-- Order Service metrics: `http://localhost:8080/actuator/prometheus`
-- Order Service health: `http://localhost:8080/actuator/health`
+Scrapes: `prometheus/prometheus.yml` (order/inventory/payment/notification actuators + `kafka-exporter`).
 
-### Grafana datasource
+**Useful metrics**
 
-This repo includes datasource provisioning at:
+| Signal | Metric |
+|--------|--------|
+| Saga steps | `saga_step_completions_total` / `saga_step_failures_total` |
+| Redis idempotency | `idempotency_claims_total{result="miss\|hit"}` |
+| Kafka lag | `kafka_consumergroup_lag` |
+| Postgres pool | `hikaricp_connections_*` (order-service + `postgres` profile) |
 
-- `grafana/provisioning/datasources/datasources.yml`
+### CloudWatch metrics (Micrometer)
 
-Prometheus scrape config is in:
+Alongside Prometheus, each service can export JVM/HTTP + saga counters to CloudWatch:
 
-- `prometheus/prometheus.yml`
+```bash
+export CLOUDWATCH_ENABLED=true
+export AWS_REGION=us-east-1
+export CLOUDWATCH_NAMESPACE=EventCart
+# plus AWS credentials
+```
 
-### Notes
+Config: `application.yml` per service · registry: `micrometer-registry-cloudwatch2`.
 
-- Keep the service ports in Prometheus scrape targets aligned with your local run ports.
-- If `order-service` is run on a custom port (for example `8095`), update Prometheus target(s) accordingly.
+### Structured JSON logs
+
+Default/cluster profiles emit **Logstash JSON** (`logback-spring.xml`) with `service`, `level`, `traceId`, `eventType`.  
+Human-readable console logs: profile **`local`** or **`dev`** (`spring.profiles.default=local`).
+
+### EC2 CloudWatch agent
+
+Install/config: `scripts/ec2/install-cloudwatch-agent.sh` · agent JSON: `monitoring/cloudwatch-agent/` · optional GitHub Action: `.github/workflows/cloudwatch-agent-ec2.yml`.
+
+## 🛡️ Admin API + Angular dashboard
+
+Internal endpoints on **order-service** (not for customers):
+
+| Method | Path | Auth |
+|--------|------|------|
+| `GET` | `/admin/sagas` | Basic or `X-Admin-Api-Key` |
+| `GET` | `/admin/dlq` | same |
+| `POST` | `/admin/dlq/{id}/replay` | same |
+
+```bash
+# Defaults (override via ADMIN_USERNAME / ADMIN_PASSWORD / ADMIN_API_KEY)
+curl -u admin:admin-change-me http://localhost:8080/admin/sagas
+curl -H "X-Admin-Api-Key: eventcart-admin-key-change-me" http://localhost:8080/admin/dlq
+```
+
+- Saga visibility: `saga_state` / `saga_step` (Postgres) or in-memory when not on `postgres`
+- DLQ: failed consumers → `*.DLT` → admin list/replay
+
+**Angular admin UI**
+
+```bash
+cd eventcart-admin && npm start   # http://localhost:4200  (proxies /admin → :8080)
+```
+
+## 🔥 Load testing (k6)
+
+Full checkout: `POST /orders` → poll until `CONFIRMED`/`FAILED`, up to ~1000 concurrent VUs.
+
+```bash
+# k6 only → one-pager summary
+k6 run load-tests/k6/checkout.js
+
+# k6 + Prometheus samples (Kafka lag, Redis hit/miss, Hikari) → resume report
+docker compose up -d kafka kafka-exporter prometheus grafana
+./load-tests/k6/run-with-observability.sh
+# → load-tests/k6/LOAD_TEST_REPORT.md  (success / errors / p95 / zero duplicates + infra)
+```
+
+Details: [`load-tests/k6/README.md`](load-tests/k6/README.md).
+
+## ☸️ Kubernetes (Kind)
+
+See **[`DEPLOYMENT.md`](DEPLOYMENT.md)** and `scripts/k8s/deploy.sh`. CI: `.github/workflows/kubernetes.yml`.
 
 ## 🗄️ Phase 5 Persistence Status (Order Service)
 
@@ -209,7 +275,7 @@ Optional datasource overrides:
 1. **Create an order**
 
 ```bash
-curl -X POST http://localhost:8084/orders \
+curl -X POST http://localhost:8080/orders \
   -H "Content-Type: application/json" \
   -d '{"items":[{"sku":"BOOK-123","quantity":1}],"totalAmount":49.99}'
 ```
@@ -226,7 +292,7 @@ curl -X POST http://localhost:8084/orders \
 3. **Check order status**
 
 ```bash
-curl http://localhost:8084/orders/<orderId>
+curl http://localhost:8080/orders/<orderId>
 ```
 
 The response reflects the latest Saga status from the in-memory `OrderStore`.
@@ -236,7 +302,7 @@ The response reflects the latest Saga status from the in-memory `OrderStore`.
 Optional **demo-only** flag on **`POST /orders`**: include **`"forcePaymentFailure": true`** to drive a **guaranteed `payment.failed`** after inventory reserves, without relying on `orderId` patterns. Omitted or `false` keeps the default success path (or legacy `fail-pay` / `PAYFAIL` behavior).
 
 ```bash
-curl -s -X POST http://localhost:8084/orders \
+curl -s -X POST http://localhost:8080/orders \
   -H "Content-Type: application/json" \
   -d '{"items":[{"sku":"BOOK-123","quantity":1}],"totalAmount":49.99,"forcePaymentFailure":true}'
 ```
@@ -270,7 +336,7 @@ Phase 3 is the **reliability** story: **Redis idempotency** (saga consumers do n
 
 - **Kafka** running (e.g. `docker compose up -d` from the repo root — broker is `eventcart-kafka`).
 - **Redis** on `localhost:6379` (compose Redis may be commented out; run Redis locally if needed).
-- Services: **order** `8084`, **inventory** `8081`, **payment** `8082`, **notification** `8083`.
+- Services: **order** `8080`, **inventory** `8081`, **payment** `8082`, **notification** `8083`.
 - Kafka clients on the host use **`localhost:29092`**; **inside** the Kafka container use **`kafka:9092`**.
 
 **Kafka producer helper (host)**
@@ -308,7 +374,7 @@ docker exec eventcart-kafka bash -c 'echo "{\"orderId\":\"'"$ORDER_ID"'\"}" | ka
 1. Create an order (valid SKU — not `FAIL`):
 
 ```bash
-curl -s -X POST http://localhost:8084/orders \
+curl -s -X POST http://localhost:8080/orders \
   -H "Content-Type: application/json" \
   -d '{"items":[{"sku":"BOOK-123","quantity":1}],"totalAmount":49.99}'
 ```
@@ -318,7 +384,7 @@ curl -s -X POST http://localhost:8084/orders \
 3. Poll until the status is **`CONFIRMED`** (saga completes asynchronously):
 
 ```bash
-curl -s "http://localhost:8084/orders/$ORDER_ID"
+curl -s "http://localhost:8080/orders/$ORDER_ID"
 ```
 
 **Pass criteria:** response body shows `"status":"CONFIRMED"` after inventory reserves and payment succeeds.
@@ -332,8 +398,8 @@ curl -s "http://localhost:8084/orders/$ORDER_ID"
 2. Call **`GET` twice** in a row:
 
 ```bash
-curl -s "http://localhost:8084/orders/$ORDER_ID"
-curl -s "http://localhost:8084/orders/$ORDER_ID"
+curl -s "http://localhost:8080/orders/$ORDER_ID"
+curl -s "http://localhost:8080/orders/$ORDER_ID"
 ```
 
 3. Watch **order-service** logs: second request should show **`Cache hit: orderId=…`** from `RedisOrderCacheService` (single log line per GET; no duplicate controller cache lines).

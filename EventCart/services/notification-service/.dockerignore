@@ -1,0 +1,9 @@
+target/
+.mvn/wrapper/maven-wrapper.jar
+*.iml
+.idea/
+.git/
+.gitignore
+README.md
+**/*Test.java
+**/*Tests.java

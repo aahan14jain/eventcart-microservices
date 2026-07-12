@@ -1,0 +1,135 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: payment-service-config
+  namespace: eventcart
+  labels:
+    app.kubernetes.io/name: payment-service
+    app.kubernetes.io/component: consumer
+    app.kubernetes.io/part-of: eventcart
+data:
+  SERVER_PORT: "8082"
+  SPRING_PROFILES_ACTIVE: kubernetes
+  SPRING_KAFKA_BOOTSTRAP_SERVERS: eventcart-kafka:9092
+  SPRING_DATA_REDIS_HOST: redis
+  SPRING_DATA_REDIS_PORT: "6379"
+  SPRING_DATA_REDIS_DATABASE: "2"
+  EVENT_IDEMPOTENCY_TTL_HOURS: "24"
+  MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: "true"
+  MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: when_authorized
+  MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info,metrics,prometheus
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: payment-service-secret
+  namespace: eventcart
+  labels:
+    app.kubernetes.io/name: payment-service
+    app.kubernetes.io/component: consumer
+    app.kubernetes.io/part-of: eventcart
+type: Opaque
+stringData:
+  PLACEHOLDER: unused
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: payment-service
+  namespace: eventcart
+  labels:
+    app.kubernetes.io/name: payment-service
+    app.kubernetes.io/component: consumer
+    app.kubernetes.io/part-of: eventcart
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8082
+      targetPort: http
+  selector:
+    app.kubernetes.io/name: payment-service
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment-service
+  namespace: eventcart
+  labels:
+    app.kubernetes.io/name: payment-service
+    app.kubernetes.io/component: consumer
+    app.kubernetes.io/part-of: eventcart
+    app.kubernetes.io/version: "0.0.1"
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: payment-service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: payment-service
+        app.kubernetes.io/component: consumer
+        app.kubernetes.io/part-of: eventcart
+        app.kubernetes.io/version: "0.0.1"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8082"
+        prometheus.io/path: "/actuator/prometheus"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: payment-service
+          image: eventcart/payment-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8082
+          envFrom:
+            - configMapRef:
+                name: payment-service-config
+            - secretRef:
+                name: payment-service-secret
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          startupProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sh", "-c", "sleep 10"]

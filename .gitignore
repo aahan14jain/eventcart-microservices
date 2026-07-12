@@ -18,3 +18,9 @@
 # Build
 **/build/
 **/dist/
+
+# k6 load-test run artifacts
+load-tests/k6/checkout-summary.json
+load-tests/k6/checkout-one-pager.md
+load-tests/k6/LOAD_TEST_REPORT.md
+load-tests/k6/prom-samples.jsonl

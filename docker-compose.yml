@@ -47,8 +47,23 @@ services:
     networks:
       - eventcart-network
 
+  # Consumer-group lag for Prometheus (kafka_consumergroup_lag*)
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:v1.7.0
+    container_name: eventcart-kafka-exporter
+    depends_on:
+      kafka:
+        condition: service_healthy
+    command:
+      - --kafka.server=kafka:9092
+      - --web.listen-address=:9308
+    ports:
+      - "9308:9308"
+    networks:
+      - eventcart-network
+
   # Metrics: Prometheus http://localhost:9090 | Grafana http://localhost:3000 (admin/admin, local demo).
-  # Scrapes Spring apps on the host (order 8084 / inventory 8081 / payment 8082) via host.docker.internal.
+  # Scrapes Spring apps on the host (order 8080 / inventory 8081 / payment 8082) via host.docker.internal.
   prometheus:
     image: prom/prometheus:v2.55.1
     container_name: eventcart-prometheus

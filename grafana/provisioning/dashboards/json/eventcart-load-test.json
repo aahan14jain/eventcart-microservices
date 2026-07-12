@@ -1,0 +1,128 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "title": "Kafka consumer lag (sum by group)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum by (consumergroup) (kafka_consumergroup_lag)",
+          "legendFormat": "{{consumergroup}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "drawStyle": "line", "fillOpacity": 10 }
+        }
+      }
+    },
+    {
+      "title": "Redis idempotency hit vs miss rate",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum by (application, result) (rate(idempotency_claims_total[1m]))",
+          "legendFormat": "{{application}} {{result}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": { "drawStyle": "line", "fillOpacity": 10 }
+        }
+      }
+    },
+    {
+      "title": "Postgres HikariCP pool (order-service)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "hikaricp_connections_active{application=\"order-service\"}",
+          "legendFormat": "active",
+          "refId": "A"
+        },
+        {
+          "expr": "hikaricp_connections_idle{application=\"order-service\"}",
+          "legendFormat": "idle",
+          "refId": "B"
+        },
+        {
+          "expr": "hikaricp_connections_pending{application=\"order-service\"}",
+          "legendFormat": "pending",
+          "refId": "C"
+        },
+        {
+          "expr": "hikaricp_connections_max{application=\"order-service\"}",
+          "legendFormat": "max",
+          "refId": "D"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "drawStyle": "line", "fillOpacity": 10 }
+        }
+      }
+    },
+    {
+      "title": "HTTP p95 latency (order-service)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, uri) (rate(http_server_requests_seconds_bucket{application=\"order-service\"}[1m])))",
+          "legendFormat": "{{uri}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": { "drawStyle": "line", "fillOpacity": 10 }
+        }
+      }
+    },
+    {
+      "title": "Saga step completions",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum by (application, step) (rate(saga_step_completions_total[1m]))",
+          "legendFormat": "{{application}} {{step}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": { "drawStyle": "line", "fillOpacity": 10 }
+        }
+      }
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["eventcart", "load-test"],
+  "templating": { "list": [] },
+  "time": { "from": "now-15m", "to": "now" },
+  "timezone": "browser",
+  "title": "EventCart Load Test",
+  "uid": "eventcart-load-test",
+  "version": 1
+}

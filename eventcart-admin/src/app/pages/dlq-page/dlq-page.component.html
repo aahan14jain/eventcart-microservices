@@ -1,0 +1,69 @@
+<div class="page">
+  <div class="page-header">
+    <div>
+      <h2>Dead-letter queue</h2>
+      <p class="muted">Failed saga consumer messages · Replay republishes to the original topic</p>
+    </div>
+    <button mat-stroked-button type="button" (click)="refresh()" [disabled]="loading">Refresh</button>
+  </div>
+
+  <mat-progress-bar *ngIf="loading" mode="indeterminate"></mat-progress-bar>
+  <p class="error" *ngIf="error">{{ error }}</p>
+
+  <table mat-table [dataSource]="messages" class="full-width">
+    <ng-container matColumnDef="id">
+      <th mat-header-cell *matHeaderCellDef>ID</th>
+      <td mat-cell *matCellDef="let row"><code [title]="row.id">{{ truncate(row.id, 8) }}</code></td>
+    </ng-container>
+
+    <ng-container matColumnDef="topic">
+      <th mat-header-cell *matHeaderCellDef>DLT topic</th>
+      <td mat-cell *matCellDef="let row"><code>{{ row.topic }}</code></td>
+    </ng-container>
+
+    <ng-container matColumnDef="partition">
+      <th mat-header-cell *matHeaderCellDef>Part.</th>
+      <td mat-cell *matCellDef="let row">{{ row.partition }}</td>
+    </ng-container>
+
+    <ng-container matColumnDef="offset">
+      <th mat-header-cell *matHeaderCellDef>Offset</th>
+      <td mat-cell *matCellDef="let row">{{ row.offset }}</td>
+    </ng-container>
+
+    <ng-container matColumnDef="originalTopic">
+      <th mat-header-cell *matHeaderCellDef>Original topic</th>
+      <td mat-cell *matCellDef="let row"><code>{{ row.originalTopic }}</code></td>
+    </ng-container>
+
+    <ng-container matColumnDef="receivedAt">
+      <th mat-header-cell *matHeaderCellDef>Received</th>
+      <td mat-cell *matCellDef="let row">{{ row.receivedAt | date:'medium' }}</td>
+    </ng-container>
+
+    <ng-container matColumnDef="replayed">
+      <th mat-header-cell *matHeaderCellDef>Replayed</th>
+      <td mat-cell *matCellDef="let row">{{ row.replayed ? 'yes' : 'no' }}</td>
+    </ng-container>
+
+    <ng-container matColumnDef="actions">
+      <th mat-header-cell *matHeaderCellDef></th>
+      <td mat-cell *matCellDef="let row">
+        <button
+          mat-flat-button
+          color="primary"
+          type="button"
+          (click)="replay(row)"
+          [disabled]="row.replayed || replayingId === row.id">
+          {{ replayingId === row.id ? 'Replaying…' : 'Replay' }}
+        </button>
+        <div class="payload muted" [title]="row.payload">{{ truncate(row.payload) }}</div>
+      </td>
+    </ng-container>
+
+    <tr mat-header-row *matHeaderRowDef="columns"></tr>
+    <tr mat-row *matRowDef="let row; columns: columns"></tr>
+  </table>
+
+  <p class="muted" *ngIf="!loading && !messages.length && !error">DLQ is empty.</p>
+</div>

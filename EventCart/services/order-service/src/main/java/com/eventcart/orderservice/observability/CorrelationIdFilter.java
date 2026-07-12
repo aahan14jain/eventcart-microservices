@@ -4,7 +4,6 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import org.slf4j.MDC;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
@@ -36,13 +35,13 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
         }
 
         String id = resolve(request.getHeader(CorrelationId.HEADER_NAME));
-        MDC.put(CorrelationId.MDC_KEY, id);
+        LogMdc.putTraceId(id);
         request.setAttribute(CorrelationId.REQUEST_ATTRIBUTE, id);
         response.setHeader(CorrelationId.HEADER_NAME, id);
         try {
             filterChain.doFilter(request, response);
         } finally {
-            MDC.remove(CorrelationId.MDC_KEY);
+            LogMdc.clearTraceId();
         }
     }
 

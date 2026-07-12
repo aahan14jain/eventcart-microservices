@@ -3,6 +3,8 @@ package com.eventcart.payment_service.messaging;
 import com.eventcart.payment_service.events.PaymentFailedEvent;
 import com.eventcart.payment_service.events.PaymentSucceededEvent;
 import com.eventcart.payment_service.idempotency.IdempotencyService;
+import com.eventcart.payment_service.metrics.SagaMetrics;
+import com.eventcart.payment_service.observability.LogMdc;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -21,17 +23,19 @@ public class InventoryReservedListener {
     private final ObjectMapper objectMapper;
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final IdempotencyService idempotencyService;
+    private final SagaMetrics sagaMetrics;
 
     public InventoryReservedListener(ObjectMapper objectMapper, KafkaTemplate<String, Object> kafkaTemplate,
-            IdempotencyService idempotencyService) {
+            IdempotencyService idempotencyService, SagaMetrics sagaMetrics) {
         this.objectMapper = objectMapper;
         this.kafkaTemplate = kafkaTemplate;
         this.idempotencyService = idempotencyService;
+        this.sagaMetrics = sagaMetrics;
     }
 
     @KafkaListener(topics = "inventory.reserved", groupId = "payment-group")
     public void onInventoryReserved(String message) {
-        try {
+        try (var ignored = LogMdc.eventType(EVENT_INVENTORY_RESERVED)) {
             log.info("inventory.reserved incoming json={}", message);
             JsonNode root = objectMapper.readTree(message);
             String orderId = root.has("orderId") ? root.get("orderId").asText() : null;
@@ -54,13 +58,16 @@ public class InventoryReservedListener {
             if (shouldFail) {
                 PaymentFailedEvent event = new PaymentFailedEvent(orderId, "PAYMENT_DECLINED");
                 kafkaTemplate.send("payment.failed", orderId, event);
+                sagaMetrics.stepFailed(SagaMetrics.STEP_PAYMENT_FAILED);
                 log.info("Published payment.failed: orderId={}, reason=PAYMENT_DECLINED", orderId);
             } else {
                 PaymentSucceededEvent event = new PaymentSucceededEvent(orderId);
                 kafkaTemplate.send("payment.succeeded", orderId, event);
+                sagaMetrics.stepCompleted(SagaMetrics.STEP_PAYMENT_SUCCEEDED);
                 log.info("Published payment.succeeded: orderId={}", orderId);
             }
         } catch (Exception e) {
+            sagaMetrics.stepFailed(EVENT_INVENTORY_RESERVED);
             log.error("Failed to process inventory.reserved message: {}", e.getMessage());
         }
     }

@@ -1,0 +1,11 @@
+<mat-toolbar color="primary" class="toolbar">
+  <span class="brand">{{ title }}</span>
+  <nav class="nav">
+    <a mat-button routerLink="/sagas" routerLinkActive="active">Sagas</a>
+    <a mat-button routerLink="/dlq" routerLinkActive="active">DLQ</a>
+  </nav>
+</mat-toolbar>
+
+<main class="content">
+  <router-outlet />
+</main>

@@ -3,8 +3,11 @@ package com.eventcart.orderservice.messaging;
 import com.eventcart.orderservice.OrderRecord;
 import com.eventcart.orderservice.OrderStatus;
 import com.eventcart.orderservice.OrderStore;
+import com.eventcart.orderservice.admin.SagaAdminService;
 import com.eventcart.orderservice.cache.RedisOrderCacheService;
 import com.eventcart.orderservice.idempotency.IdempotencyService;
+import com.eventcart.orderservice.metrics.SagaMetrics;
+import com.eventcart.orderservice.observability.LogMdc;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -31,13 +34,18 @@ public class SagaStatusListener {
     private final OrderStore orderStore;
     private final IdempotencyService idempotencyService;
     private final RedisOrderCacheService redisOrderCacheService;
+    private final SagaMetrics sagaMetrics;
+    private final SagaAdminService sagaAdminService;
 
     public SagaStatusListener(ObjectMapper objectMapper, OrderStore orderStore,
-            IdempotencyService idempotencyService, RedisOrderCacheService redisOrderCacheService) {
+            IdempotencyService idempotencyService, RedisOrderCacheService redisOrderCacheService,
+            SagaMetrics sagaMetrics, SagaAdminService sagaAdminService) {
         this.objectMapper = objectMapper;
         this.orderStore = orderStore;
         this.idempotencyService = idempotencyService;
         this.redisOrderCacheService = redisOrderCacheService;
+        this.sagaMetrics = sagaMetrics;
+        this.sagaAdminService = sagaAdminService;
     }
 
     @KafkaListener(topics = "inventory.reserved", groupId = "order-group")
@@ -61,7 +69,7 @@ public class SagaStatusListener {
     }
 
     private void handle(String message, String eventType, OrderStatus newStatus) {
-        try {
+        try (var ignored = LogMdc.eventType(eventType)) {
             String orderId = extractOrderId(message, eventType);
             if (orderId == null) {
                 return;
@@ -70,9 +78,12 @@ public class SagaStatusListener {
                 return;
             }
             persistOrderStatus(orderId, newStatus, eventType);
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
+            sagaMetrics.stepFailed(eventType);
             log.error("event processed: eventType={} orderId={} eventId={} result={} error={}",
                     eventType, "unknown", NO_EVENT_ID, "handler_failed", e.getMessage());
+            // Re-throw so DefaultErrorHandler can publish to <topic>.DLT for admin visibility.
+            throw e;
         }
     }
 
@@ -97,11 +108,20 @@ public class SagaStatusListener {
                 record -> {
                     OrderStatus updated = record.getStatus();
                     redisOrderCacheService.saveOrderStatus(orderId, updated.name());
+                    sagaAdminService.recordSagaEvent(orderId, updated, eventType);
+                    if (updated == OrderStatus.FAILED) {
+                        sagaMetrics.stepFailed(eventType);
+                    } else {
+                        sagaMetrics.stepCompleted(eventType);
+                    }
                     log.info("event processed: eventType={} orderId={} eventId={} result={} fromStatus={} toStatus={}",
                             eventType, orderId, NO_EVENT_ID, "ok", previous, updated);
                 },
-                () -> log.warn("event processed: eventType={} orderId={} eventId={} result={}",
-                        eventType, orderId, NO_EVENT_ID, "order_not_found"));
+                () -> {
+                    sagaMetrics.stepFailed(eventType);
+                    log.warn("event processed: eventType={} orderId={} eventId={} result={}",
+                            eventType, orderId, NO_EVENT_ID, "order_not_found");
+                });
     }
 
     private String extractOrderId(String message, String eventType) {

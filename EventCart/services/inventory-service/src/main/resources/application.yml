@@ -1,0 +1,17 @@
+# CloudWatch metrics export (additional to Prometheus). Disabled locally by default.
+# Enable with CLOUDWATCH_ENABLED=true and set AWS credentials + AWS_REGION / CLOUDWATCH_NAMESPACE.
+management:
+  metrics:
+    tags:
+      application: ${spring.application.name}
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+  cloudwatch:
+    metrics:
+      export:
+        enabled: ${CLOUDWATCH_ENABLED:false}
+        namespace: ${CLOUDWATCH_NAMESPACE:EventCart}
+        region: ${AWS_REGION:us-east-1}
+        step: 1m

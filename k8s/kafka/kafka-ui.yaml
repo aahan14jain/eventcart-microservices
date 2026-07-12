@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-ui
+  namespace: eventcart
+  labels:
+    app.kubernetes.io/name: kafka-ui
+    app.kubernetes.io/component: messaging
+    app.kubernetes.io/part-of: eventcart
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kafka-ui
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kafka-ui
+        app.kubernetes.io/part-of: eventcart
+    spec:
+      containers:
+        - name: kafka-ui
+          image: provectuslabs/kafka-ui:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: KAFKA_CLUSTERS_0_NAME
+              value: eventcart
+            - name: KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS
+              value: eventcart-kafka:9092
+            - name: DYNAMIC_CONFIG_ENABLED
+              value: "false"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-ui
+  namespace: eventcart
+  labels:
+    app.kubernetes.io/name: kafka-ui
+    app.kubernetes.io/part-of: eventcart
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+  selector:
+    app.kubernetes.io/name: kafka-ui

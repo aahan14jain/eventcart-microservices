@@ -1,0 +1,152 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: order-service-config
+  namespace: eventcart
+  labels:
+    app.kubernetes.io/name: order-service
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: eventcart
+data:
+  SPRING_PROFILES_ACTIVE: postgres
+  SERVER_PORT: "8080"
+  SPRING_KAFKA_BOOTSTRAP_SERVERS: eventcart-kafka:9092
+  SPRING_DATA_REDIS_HOST: redis
+  SPRING_DATA_REDIS_PORT: "6379"
+  SPRING_DATA_REDIS_DATABASE: "0"
+  ORDER_DB_URL: jdbc:postgresql://postgres-0.postgres:5432/eventcart_orders
+  ORDER_DB_USERNAME: eventcart
+  EVENT_IDEMPOTENCY_TTL_HOURS: "24"
+  ORDER_CACHE_TTL_SECONDS: "60"
+  CORS_ALLOWED_ORIGINS: http://api.eventcart.local,http://grafana.eventcart.local
+  MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: "true"
+  MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: when_authorized
+  MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info,metrics,prometheus
+  ADMIN_USERNAME: admin
+  # Override via Secret in real environments
+  ADMIN_PASSWORD: admin-change-me
+  ADMIN_API_KEY: eventcart-admin-key-change-me
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: order-service-secret
+  namespace: eventcart
+  labels:
+    app.kubernetes.io/name: order-service
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: eventcart
+type: Opaque
+stringData:
+  ORDER_DB_PASSWORD: eventcart-prod-secret
+  SPRING_DATASOURCE_PASSWORD: eventcart-prod-secret
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: order-service
+  namespace: eventcart
+  labels:
+    app.kubernetes.io/name: order-service
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: eventcart
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: order-service
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-service
+  namespace: eventcart
+  labels:
+    app.kubernetes.io/name: order-service
+    app.kubernetes.io/component: api
+    app.kubernetes.io/part-of: eventcart
+    app.kubernetes.io/version: "0.0.1"
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: order-service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: order-service
+        app.kubernetes.io/component: api
+        app.kubernetes.io/part-of: eventcart
+        app.kubernetes.io/version: "0.0.1"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/actuator/prometheus"
+    spec:
+      serviceAccountName: default
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: order-service
+          image: eventcart/order-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: order-service-config
+            - secretRef:
+                name: order-service-secret
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          startupProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            initialDelaySeconds: 0
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            initialDelaySeconds: 0
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - sh
+                  - -c
+                  - sleep 10
