@@ -53,8 +53,8 @@ This project implements a microservices-based event-driven architecture for mana
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/aahan14jain/EventCart-Event-Driven-Checkout-Microservices-.git
-cd EventCart-Event-Driven-Checkout-Microservices-
+git clone https://github.com/aahan14jain/eventcart-microservices.git
+cd eventcart-microservices
 ```
 
 ### 2. Start Kafka (if not already running)
