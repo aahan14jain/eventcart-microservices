@@ -1,10 +1,24 @@
-<mat-toolbar color="primary" class="toolbar">
-  <span class="brand">{{ title }}</span>
-  <nav class="nav">
-    <a mat-button routerLink="/sagas" routerLinkActive="active">Sagas</a>
-    <a mat-button routerLink="/dlq" routerLinkActive="active">DLQ</a>
-  </nav>
-</mat-toolbar>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a routerLink="/sagas" class="brand" aria-label="Choreo Ops home">
+      <span class="brand-mark">Cho<span>reo</span></span>
+      <span class="brand-sub">Ops</span>
+    </a>
+    <nav class="nav">
+      <a mat-button routerLink="/sagas" routerLinkActive="active">Sagas</a>
+      <a mat-button routerLink="/dlq" routerLinkActive="active">DLQ</a>
+    </nav>
+    <span class="spacer"></span>
+    <span class="ws-status" *ngIf="relay.connected$ | async; else wsOffline">
+      <span class="live-dot on"></span> Live
+    </span>
+    <ng-template #wsOffline>
+      <span class="ws-status muted">
+        <span class="live-dot off"></span> Polling
+      </span>
+    </ng-template>
+  </div>
+</header>
 
 <main class="content">
   <router-outlet />

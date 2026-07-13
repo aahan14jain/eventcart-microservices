@@ -26,3 +26,33 @@ export interface DlqMessage {
   receivedAt: string;
   replayed: boolean;
 }
+
+/** Payloads from eventcart-realtime WebSocket relay. */
+export interface SagaStatusRelayEvent {
+  type: 'saga.status';
+  topic: string;
+  orderId: string | null;
+  partition: number;
+  offset: string | number;
+  payload: unknown;
+  timestamp: number;
+}
+
+export interface DlqRelayEvent {
+  type: 'dlq.message';
+  topic: string;
+  originalTopic: string;
+  orderId: string | null;
+  partition: number;
+  offset: string | number;
+  payload: unknown;
+  timestamp: number;
+}
+
+export interface RelayHelloEvent {
+  type: 'relay.hello';
+  message: string;
+  topics: string[];
+}
+
+export type RelayEvent = SagaStatusRelayEvent | DlqRelayEvent | RelayHelloEvent;

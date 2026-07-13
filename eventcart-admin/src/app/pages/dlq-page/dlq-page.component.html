@@ -2,7 +2,10 @@
   <div class="page-header">
     <div>
       <h2>Dead-letter queue</h2>
-      <p class="muted">Failed saga consumer messages · Replay republishes to the original topic</p>
+      <p class="muted">
+        <span class="live-dot" [class.on]="live" [class.off]="!live"></span>
+        {{ statusHint }} · failed consumer messages
+      </p>
     </div>
     <button mat-stroked-button type="button" (click)="refresh()" [disabled]="loading">Refresh</button>
   </div>
@@ -54,7 +57,7 @@
           color="primary"
           type="button"
           (click)="replay(row)"
-          [disabled]="row.replayed || replayingId === row.id">
+          [disabled]="row.replayed || row.id.startsWith('live:') || replayingId === row.id">
           {{ replayingId === row.id ? 'Replaying…' : 'Replay' }}
         </button>
         <div class="payload muted" [title]="row.payload">{{ truncate(row.payload) }}</div>

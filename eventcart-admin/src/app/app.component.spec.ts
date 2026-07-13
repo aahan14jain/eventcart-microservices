@@ -15,8 +15,8 @@ describe('AppComponent', () => {
     expect(fixture.componentInstance).toBeTruthy();
   });
 
-  it(`should have the title 'EventCart Admin'`, () => {
+  it(`should have the title 'Choreo Ops'`, () => {
     const fixture = TestBed.createComponent(AppComponent);
-    expect(fixture.componentInstance.title).toEqual('EventCart Admin');
+    expect(fixture.componentInstance.title).toEqual('Choreo Ops');
   });
 });

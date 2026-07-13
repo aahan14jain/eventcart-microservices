@@ -1,11 +1,124 @@
-/* You can add global styles to this file, and also import other style files */
+/* Choreo ops — Material base + custom tokens */
 @import '@angular/material/prebuilt-themes/azure-blue.css';
+
+:root {
+  --ink: #07141f;
+  --ink-soft: #1a2e3d;
+  --mist: #e8f0f2;
+  --foam: #f7fbfc;
+  --sea: #1f7a6e;
+  --sea-bright: #2a9d8f;
+  --signal: #e8a838;
+  --fail: #c44b4b;
+  --ok: #2f8f5b;
+  --line: rgba(7, 20, 31, 0.1);
+  --muted: #5a6f7c;
+  --font-display: "Syne", system-ui, sans-serif;
+  --font-body: "Figtree", system-ui, sans-serif;
+}
 
 html,
 body {
   height: 100%;
   margin: 0;
-  font-family: Roboto, 'Helvetica Neue', sans-serif;
-  background: #f5f5f5;
-  color: #212121;
+  font-family: var(--font-body);
+  background:
+    radial-gradient(ellipse 80% 50% at 0% 0%, rgba(42, 157, 143, 0.16), transparent 50%),
+    radial-gradient(ellipse 50% 40% at 100% 0%, rgba(232, 168, 56, 0.1), transparent 45%),
+    linear-gradient(180deg, #dce8eb 0%, var(--mist) 35%, var(--foam) 100%);
+  background-attachment: fixed;
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+.live-dot {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  margin-right: 0.35rem;
+  vertical-align: middle;
+}
+
+.live-dot.on {
+  background: var(--ok);
+  box-shadow: 0 0 0 3px rgba(47, 143, 91, 0.22);
+  animation: live-pulse 1.8s ease-in-out infinite;
+}
+
+.live-dot.off {
+  background: #9aa8b2;
+}
+
+@keyframes live-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 3px rgba(47, 143, 91, 0.22);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(47, 143, 91, 0.06);
+  }
+}
+
+/* Material surface polish */
+.mat-mdc-table {
+  background: transparent !important;
+}
+
+.mat-mdc-header-row {
+  background: rgba(7, 20, 31, 0.04) !important;
+}
+
+.mat-mdc-header-cell {
+  font-family: var(--font-body) !important;
+  font-weight: 700 !important;
+  font-size: 0.72rem !important;
+  letter-spacing: 0.06em !important;
+  text-transform: uppercase !important;
+  color: var(--muted) !important;
+}
+
+.mat-mdc-cell {
+  font-family: var(--font-body) !important;
+  color: var(--ink) !important;
+  border-bottom-color: var(--line) !important;
+}
+
+.mat-mdc-row:hover .mat-mdc-cell {
+  background: rgba(31, 122, 110, 0.04);
+}
+
+.mat-mdc-outlined-button,
+.mat-mdc-unelevated-button,
+.mat-mdc-button {
+  font-family: var(--font-body) !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.01em !important;
+  border-radius: 2px !important;
+}
+
+.mat-mdc-unelevated-button.mat-primary {
+  --mdc-filled-button-container-color: var(--ink);
+  --mdc-filled-button-label-text-color: #f4fafb;
+}
+
+.mat-mdc-outlined-button {
+  --mdc-outlined-button-outline-color: rgba(7, 20, 31, 0.22);
+  --mdc-outlined-button-label-text-color: var(--ink);
+}
+
+.mat-mdc-progress-bar {
+  --mdc-linear-progress-active-indicator-color: var(--sea);
+  --mdc-linear-progress-track-color: rgba(31, 122, 110, 0.12);
+}
+
+code {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.84em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-dot.on {
+    animation: none;
+  }
 }

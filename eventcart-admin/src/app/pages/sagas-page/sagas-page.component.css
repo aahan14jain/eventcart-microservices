@@ -1,32 +1,43 @@
 .page {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 1rem;
 }
 
 .page-header h2 {
   margin: 0;
-  font-size: 1.25rem;
-  font-weight: 600;
+  font-family: var(--font-display, Syne, sans-serif);
+  font-size: 1.55rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
 }
 
 .muted {
-  color: #666;
-  font-size: 0.85rem;
-  margin: 0.25rem 0 0;
+  color: var(--muted, #5a6f7c);
+  font-size: 0.88rem;
+  margin: 0.4rem 0 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.15rem;
 }
 
 .error {
-  color: #b00020;
+  color: var(--fail, #c44b4b);
   margin: 0;
+  font-weight: 500;
 }
 
 .full-width {
   width: 100%;
+  border: 1px solid var(--line, rgba(7, 20, 31, 0.1));
+  border-radius: 2px;
+  overflow: hidden;
+  background: rgba(247, 251, 252, 0.65);
 }
 
 .saga-row:hover {
-  background: #f7f7f7;
+  background: transparent;
 }
 
 .detail-row td {
@@ -43,31 +54,41 @@
 }
 
 .detail {
-  padding: 0.75rem 1rem 1rem 3rem;
-  background: #fafafa;
+  padding: 0.85rem 1rem 1.1rem 3rem;
+  background: rgba(7, 20, 31, 0.025);
+  border-top: 1px solid var(--line, rgba(7, 20, 31, 0.08));
 }
 
 .detail h4 {
-  margin: 0 0 0.5rem;
-  font-size: 0.9rem;
+  margin: 0 0 0.55rem;
+  font-family: var(--font-display, Syne, sans-serif);
+  font-size: 0.95rem;
+  font-weight: 700;
 }
 
 .steps {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.85rem;
+  font-size: 0.86rem;
 }
 
 .steps th,
 .steps td {
   text-align: left;
-  padding: 0.35rem 0.5rem;
-  border-bottom: 1px solid #e0e0e0;
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid var(--line, rgba(7, 20, 31, 0.08));
+}
+
+.steps th {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted, #5a6f7c);
 }
 
 .steps .fail {
-  color: #b00020;
-  font-weight: 600;
+  color: var(--fail, #c44b4b);
+  font-weight: 700;
 }
 
 code {

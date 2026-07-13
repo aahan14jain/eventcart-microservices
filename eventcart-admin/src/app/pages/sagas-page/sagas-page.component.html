@@ -2,7 +2,11 @@
   <div class="page-header">
     <div>
       <h2>Sagas</h2>
-      <p class="muted">Polling every {{ pollHint }} · last fetch {{ lastFetchedAt ? (lastFetchedAt | date:'mediumTime') : '—' }}</p>
+      <p class="muted">
+        <span class="live-dot" [class.on]="live" [class.off]="!live"></span>
+        {{ statusHint }}
+        · last update {{ lastFetchedAt ? (lastFetchedAt | date:'mediumTime') : '—' }}
+      </p>
     </div>
   </div>
 
